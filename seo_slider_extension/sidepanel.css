@@ -209,3 +209,42 @@ button:hover { filter: brightness(1.1); }
 }
 
 .small-link:hover { text-decoration: underline; }
+
+.export-container {
+  margin-top: 20px;
+  padding-bottom: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.export-button {
+  width: 100%;
+  padding: 14px;
+  background: #10b981; /* Verde esmeralda */
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+  transition: all 0.2s ease;
+}
+
+.export-button:hover {
+  background: #059669;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(16, 185, 129, 0.3);
+}
+
+.export-button:active {
+  transform: translateY(0);
+}
+
+/* En modo oscuro, podemos darle un toque más vibrante */
+@media (prefers-color-scheme: dark) {
+  .export-button {
+    background: #10b981;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+}
