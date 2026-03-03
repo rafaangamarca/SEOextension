@@ -3,8 +3,15 @@
   "name": "SEO Slider Auditor",
   "version": "1.0.0",
   "description": "Panel lateral para revisar una URL con comprobaciones SEO, accesibilidad y presencia técnica.",
-  "permissions": ["sidePanel"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "sidePanel",
+    "tabs",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.js"
   },
