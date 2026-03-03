@@ -13,6 +13,7 @@ const statusEl = document.getElementById('status');
 const resultsEl = document.getElementById('results');
 const scoreEl = document.getElementById('score');
 const scoreTextEl = document.getElementById('scoreText');
+const exportBtn = document.getElementById('exportBtn');
 
 // 2. ENLACES DE AYUDA: Añadidos a la configuración de los checks
 const CHECKS = [
@@ -289,3 +290,47 @@ function buildManualExtra(key, host) {
 function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
+
+exportBtn.addEventListener('click', () => {
+    const url = urlInput.value || 'web-analizada';
+    const score = scoreEl.textContent;
+    const scoreText = scoreTextEl.textContent;
+    const items = document.querySelectorAll('.item');
+
+    if (items.length === 0) {
+        alert("Primero realiza un análisis para poder exportar.");
+        return;
+    }
+
+    let report = `==========================================\n`;
+    report += `    REPORTE SEO: ${url}\n`;
+    report += `==========================================\n`;
+    report += `Puntuación: ${score}/100 (${scoreText})\n`;
+    report += `Fecha: ${new Date().toLocaleString()}\n\n`;
+
+    items.forEach((item) => {
+        const title = item.querySelector('h3').innerText;
+        const status = item.querySelector('.pill').innerText;
+        // Limpiamos el detalle de espacios extras
+        const detail = item.querySelector('.meta').innerText.replace(/\s+/g, ' ').trim();
+        
+        report += `[${status.toUpperCase()}] ${title}\n`;
+        report += `Detalle: ${detail}\n`;
+        report += `------------------------------------------\n`;
+    });
+
+    // Crear el archivo para descargar
+    const blob = new Blob([report], { type: 'text/plain' });
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    
+    // Limpiar el nombre del archivo de caracteres raros
+    const fileName = `SEO_Audit_${url.replace(/https?:\/\/|www\.|\/|:/g, '')}.txt`;
+    
+    link.href = blobUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(blobUrl);
+});
