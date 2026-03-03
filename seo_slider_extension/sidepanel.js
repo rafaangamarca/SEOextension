@@ -1,3 +1,12 @@
+document.addEventListener('DOMContentLoaded', async () => {
+  // 1. DETECCIÓN AUTOMÁTICA: Al abrir, captura la URL de la pestaña activa
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab?.url && tab.url.startsWith('http')) {
+    urlInput.value = tab.url;
+    analyze(); // Lanza el análisis automáticamente al abrir
+  }
+});
+
 const urlInput = document.getElementById('urlInput');
 const analyzeBtn = document.getElementById('analyzeBtn');
 const statusEl = document.getElementById('status');
@@ -5,22 +14,83 @@ const resultsEl = document.getElementById('results');
 const scoreEl = document.getElementById('score');
 const scoreTextEl = document.getElementById('scoreText');
 
+// 2. ENLACES DE AYUDA: Añadidos a la configuración de los checks
 const CHECKS = [
-  { key: 'morePages', weight: 10, type: 'automatic', title: 'El sitio tiene más páginas que el index', desc: 'Busca enlaces internos y sitemap para confirmar que no es una única página.' },
-  { key: 'searchPresence', weight: 4, type: 'manual', title: 'La web está en más buscadores', desc: 'No puede verificarse de forma fiable sin consultar buscadores externos. Se deja enlace rápido de revisión manual.' },
-  { key: 'googleAnalytics', weight: 8, type: 'heuristic', title: 'Aparece Google Analytics', desc: 'Detecta scripts o llamadas típicas de GA / gtag / GTM.' },
-  { key: 'robots', weight: 8, type: 'automatic', title: 'Existe robots.txt', desc: 'Comprueba si responde /robots.txt y revisa su contenido básico.' },
-  { key: 'githubRoot', weight: 3, type: 'manual', title: 'La web está en la raíz del repositorio de GitHub', desc: 'No se puede comprobar con fiabilidad desde la web publicada. Revisión manual.' },
-  { key: 'sitemap', weight: 8, type: 'automatic', title: 'Existe sitemap.xml', desc: 'Comprueba si responde /sitemap.xml y cuántas URL contiene.' },
-  { key: 'errorHandling', weight: 8, type: 'heuristic', title: 'No hay páginas de error rotas', desc: 'Prueba una URL inexistente para ver si devuelve una 404/redirect controlada.' },
-  { key: 'browsers', weight: 3, type: 'manual', title: 'Probada en más navegadores', desc: 'Esto no puede auditarse automáticamente desde una sola extensión.' },
-  { key: 'links', weight: 8, type: 'heuristic', title: 'Tiene enlaces de ida y de vuelta', desc: 'Cuenta enlaces internos y salientes en la home como pista de enlazado.' },
-  { key: 'trends', weight: 3, type: 'manual', title: 'Noticias / Google Trends', desc: 'Se facilita una ruta manual para revisar qué busca la gente.' },
-  { key: 'sitemapIndexed', weight: 4, type: 'manual', title: 'Las URL del sitemap aparecen en Google', desc: 'Requiere consulta externa a Google; la extensión lo marca como revisión manual.' },
-  { key: 'ads', weight: 5, type: 'heuristic', title: 'Anuncios detectados', desc: 'Busca scripts/redes publicitarias habituales como señal orientativa.' },
-  { key: 'accessibility', weight: 12, type: 'heuristic', title: 'Accesibilidad básica', desc: 'Comprueba lang, title, alt en imágenes y labels en formularios.' },
-  { key: 'social', weight: 6, type: 'heuristic', title: 'Redes sociales (LinkedIn)', desc: 'Busca enlaces a LinkedIn y metadatos sociales básicos.' },
-  { key: 'bing', weight: 8, type: 'heuristic', title: 'Tiene Bing Webmaster Tools', desc: 'Busca meta de verificación de Bing: msvalidate.01.' }
+  { 
+    key: 'morePages', weight: 10, type: 'automatic', title: 'Más de una página', 
+    desc: 'Busca enlaces internos y sitemap para confirmar que no es una "one-page".',
+    helpUrl: 'https://developers.google.com/search/docs/fundamentals/seo-starter-guide?hl=es#organize-hierarchy'
+  },
+  { 
+    key: 'searchPresence', weight: 4, type: 'manual', title: 'Presencia en buscadores', 
+    desc: 'Verificación manual en Google y Bing.',
+    helpUrl: 'https://developers.google.com/search/docs/monitor-debug/search-operators/all-search-operators?hl=es'
+  },
+  { 
+    key: 'googleAnalytics', weight: 8, type: 'heuristic', title: 'Google Analytics', 
+    desc: 'Detecta scripts de GA4 o Google Tag Manager.',
+    helpUrl: 'https://support.google.com/analytics/answer/1008015?hl=en'
+  },
+  { 
+    key: 'robots', weight: 8, type: 'automatic', title: 'Archivo robots.txt', 
+    desc: 'Comprueba si el archivo existe y es accesible.',
+    helpUrl: 'https://developers.google.com/search/docs/crawling-indexing/robots/intro?hl=es'
+  },
+  { 
+    key: 'githubRoot', weight: 3, type: 'manual', title: 'Raíz de Repositorio', 
+    desc: 'Revisión de la estructura en GitHub.',
+    helpUrl: 'https://pages.github.com/'
+  },
+  { 
+    key: 'sitemap', weight: 8, type: 'automatic', title: 'Mapa del sitio (Sitemap)', 
+    desc: 'Verifica la existencia de sitemap.xml.',
+    helpUrl: 'https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview?hl=es'
+  },
+  { 
+    key: 'errorHandling', weight: 8, type: 'heuristic', title: 'Manejo de errores 404', 
+    desc: 'Prueba si una página inexistente devuelve un error controlado.',
+    helpUrl: 'https://developers.google.com/search/docs/crawling-indexing/soft-404-errors?hl=es'
+  },
+  { 
+    key: 'browsers', weight: 3, type: 'manual', title: 'Compatibilidad de navegadores', 
+    desc: 'Requiere prueba visual en diferentes motores.',
+    helpUrl: 'https://developer.mozilla.org/es/docs/Learn/Tools_and_testing/Cross_browser_testing'
+  },
+  { 
+    key: 'links', weight: 8, type: 'heuristic', title: 'Enlaces internos/externos', 
+    desc: 'Analiza la salud del enlazado de la página.',
+    helpUrl: 'https://developers.google.com/search/docs/fundamentals/seo-starter-guide?hl=es#optimize-content'
+  },
+  { 
+    key: 'trends', weight: 3, type: 'manual', title: 'Tendencias de búsqueda', 
+    desc: 'Compara la temática con Google Trends.',
+    helpUrl: 'https://trends.google.com/trends/'
+  },
+  { 
+    key: 'sitemapIndexed', weight: 4, type: 'manual', title: 'Indexación de Sitemap', 
+    desc: 'Comprobar si las URLs del sitemap están en el índice.',
+    helpUrl: 'https://search.google.com/search-console/about'
+  },
+  { 
+    key: 'ads', weight: 5, type: 'heuristic', title: 'Publicidad (Ads)', 
+    desc: 'Detecta presencia de AdSense u otras redes.',
+    helpUrl: 'https://support.google.com/adsense/answer/75440?hl=en'
+  },
+  { 
+    key: 'accessibility', weight: 12, type: 'heuristic', title: 'Accesibilidad SEO', 
+    desc: 'Atributos alt, lang y títulos correctos.',
+    helpUrl: 'https://developers.google.com/search/docs/appearance/visual-elements-gallery?hl=es'
+  },
+  { 
+    key: 'social', weight: 6, type: 'heuristic', title: 'Señales Sociales', 
+    desc: 'Presencia de enlaces a LinkedIn o grafos sociales.',
+    helpUrl: 'https://ogp.me/'
+  },
+  { 
+    key: 'bing', weight: 8, type: 'heuristic', title: 'Bing Webmaster Tools', 
+    desc: 'Detecta meta de verificación de Bing.',
+    helpUrl: 'https://www.bing.com/webmasters/help/getting-started-gsw-60c1d291'
+  }
 ];
 
 analyzeBtn.addEventListener('click', analyze);
@@ -39,6 +109,7 @@ function normalizeUrl(value) {
 }
 
 async function fetchText(url) {
+  // Manejo de caché y errores para optimizar peticiones
   const res = await fetch(url, { redirect: 'follow', cache: 'no-store' });
   const text = await res.text();
   return { res, text };
@@ -77,13 +148,20 @@ async function analyze() {
     return;
   }
 
-  setStatus('Analizando sitio, robots, sitemap y señales de la home...');
+  setStatus('Analizando señales SEO en paralelo...');
 
   try {
-    const homepage = await fetchText(baseUrl);
-    const doc = toDoc(homepage.text);
     const base = new URL(baseUrl);
 
+    // 3. ASINCRONÍA EN PARALELO: Ejecutamos todas las peticiones de red simultáneamente
+    const [homepage, robotsResult, sitemapResult, errorResult] = await Promise.all([
+      fetchText(baseUrl),
+      fetchText(pick(base, '/robots.txt')).catch(() => ({ res: { ok: false }, text: '' })),
+      fetchText(pick(base, '/sitemap.xml')).catch(() => ({ res: { ok: false }, text: '' })),
+      fetch(pick(base, `/seo-audit-404-${Date.now()}`), { redirect: 'follow' }).catch(() => ({ ok: false, status: 'Error' }))
+    ]);
+
+    const doc = toDoc(homepage.text);
     const anchors = [...doc.querySelectorAll('a[href]')].map(a => a.getAttribute('href'));
     const resolved = unique(anchors.map(h => {
       try { return new URL(h, base).toString(); } catch { return null; }
@@ -95,45 +173,26 @@ async function analyze() {
     const imgs = [...doc.images];
     const imgsWithoutAlt = imgs.filter(i => !i.hasAttribute('alt')).length;
     const forms = [...doc.forms];
-    const inputs = forms.flatMap(f => [...f.querySelectorAll('input, select, textarea')]);
     const labels = [...doc.querySelectorAll('label[for]')];
     const linkedInFound = /linkedin\.com/i.test(homepage.text) || resolved.some(u => /linkedin\.com/i.test(u));
     const bingVerification = !!doc.querySelector('meta[name="msvalidate.01"]');
 
-    let robotsInfo = { exists: false, ok: false, note: 'No encontrado' };
-    try {
-      const robots = await fetchText(pick(base, '/robots.txt'));
-      robotsInfo.exists = robots.res.ok;
-      robotsInfo.ok = robots.res.ok;
-      robotsInfo.note = robots.res.ok ? `HTTP ${robots.res.status}. ${robots.text.slice(0, 120).replace(/\s+/g, ' ')}` : `HTTP ${robots.res.status}`;
-    } catch {
-      robotsInfo.note = 'No se pudo leer robots.txt';
-    }
+    // Procesar Robots
+    const robotsInfo = {
+      exists: robotsResult.res.ok,
+      note: robotsResult.res.ok ? `Detectado (${robotsResult.text.length} bytes)` : `No encontrado (HTTP ${robotsResult.res.status || 'N/A'})`
+    };
 
-    let sitemapInfo = { exists: false, count: 0, note: 'No encontrado' };
-    try {
-      const sitemap = await fetchText(pick(base, '/sitemap.xml'));
-      sitemapInfo.exists = sitemap.res.ok;
-      if (sitemap.res.ok) {
-        const count = (sitemap.text.match(/<loc>/gi) || []).length;
-        sitemapInfo.count = count;
-        sitemapInfo.note = `HTTP ${sitemap.res.status}. URLs detectadas: ${count}`;
-      } else {
-        sitemapInfo.note = `HTTP ${sitemap.res.status}`;
-      }
-    } catch {
-      sitemapInfo.note = 'No se pudo leer sitemap.xml';
-    }
+    // Procesar Sitemap
+    const sitemapCount = (sitemapResult.text.match(/<loc>/gi) || []).length;
+    const sitemapInfo = {
+      exists: sitemapResult.res.ok,
+      count: sitemapCount,
+      note: sitemapResult.res.ok ? `Detectado. URLs: ${sitemapCount}` : `No encontrado`
+    };
 
-    let errorInfo = { controlled: false, note: 'No comprobado' };
-    try {
-      const fakeUrl = pick(base, `/chatgpt-audit-${Date.now()}-missing-page`);
-      const res = await fetch(fakeUrl, { redirect: 'follow', cache: 'no-store' });
-      errorInfo.controlled = res.status === 404 || res.redirected;
-      errorInfo.note = `HTTP ${res.status}${res.redirected ? ' con redirección' : ''}`;
-    } catch {
-      errorInfo.note = 'No se pudo probar la URL inexistente';
-    }
+    // Procesar Error Handling
+    const errorControlled = errorResult.ok === false || errorResult.status === 404 || errorResult.redirected;
 
     const hasMultiplePages = internalLinks.filter(u => {
       try {
@@ -148,76 +207,33 @@ async function analyze() {
       && (forms.length === 0 || labels.length > 0);
 
     const payload = {
-      morePages: {
-        status: hasMultiplePages ? 'ok' : 'bad',
-        detail: `Enlaces internos: ${internalLinks.length}. Sitemap URLs: ${sitemapInfo.count}.`
-      },
-      searchPresence: {
-        status: 'manual',
-        detail: `Revisar manualmente: site:${base.hostname} en Google y Bing.`
-      },
+      morePages: { status: hasMultiplePages ? 'ok' : 'bad', detail: `Internos: ${internalLinks.length}. Sitemap: ${sitemapInfo.count}.` },
+      searchPresence: { status: 'manual', detail: `Revisar site:${base.hostname}` },
       googleAnalytics: {
         status: isProbablyGoogleAnalytics(homepage.text + '\n' + scriptSrcs) ? 'ok' : 'warn',
-        detail: isProbablyGoogleAnalytics(homepage.text + '\n' + scriptSrcs) ? 'Se han detectado patrones de GA/GTM.' : 'No se han visto señales claras de GA.'
+        detail: isProbablyGoogleAnalytics(homepage.text + '\n' + scriptSrcs) ? 'Patrones GA detectados.' : 'Sin señales de analítica.'
       },
-      robots: {
-        status: robotsInfo.exists ? 'ok' : 'bad',
-        detail: robotsInfo.note
-      },
-      githubRoot: {
-        status: 'manual',
-        detail: 'Solo puede verificarse viendo el repositorio fuente.'
-      },
-      sitemap: {
-        status: sitemapInfo.exists ? 'ok' : 'bad',
-        detail: sitemapInfo.note
-      },
-      errorHandling: {
-        status: errorInfo.controlled ? 'ok' : 'warn',
-        detail: errorInfo.note
-      },
-      browsers: {
-        status: 'manual',
-        detail: 'Necesita prueba real en Safari, Firefox, Edge, etc.'
-      },
-      links: {
-        status: (internalLinks.length > 1 && externalLinks.length > 0) ? 'ok' : 'warn',
-        detail: `Internos: ${internalLinks.length}. Externos: ${externalLinks.length}.`
-      },
-      trends: {
-        status: 'manual',
-        detail: `Revisión sugerida en Google Trends para la temática del sitio.`
-      },
-      sitemapIndexed: {
-        status: 'manual',
-        detail: 'Comparar manualmente sitemap con resultados de Google.'
-      },
-      ads: {
-        status: detectAds(homepage.text + '\n' + scriptSrcs) ? 'ok' : 'warn',
-        detail: detectAds(homepage.text + '\n' + scriptSrcs) ? 'Se han detectado scripts de anuncios.' : 'No se han detectado señales típicas de anuncios.'
-      },
-      accessibility: {
-        status: accessibilityOk ? 'ok' : 'warn',
-        detail: `lang: ${!!doc.documentElement.getAttribute('lang')} · title: ${!!doc.querySelector('title')} · imágenes sin alt: ${imgsWithoutAlt} · formularios: ${forms.length}.`
-      },
-      social: {
-        status: linkedInFound ? 'ok' : 'warn',
-        detail: linkedInFound ? 'Se ha detectado LinkedIn.' : 'No se ha visto LinkedIn en la home.'
-      },
-      bing: {
-        status: bingVerification ? 'ok' : 'warn',
-        detail: bingVerification ? 'Meta msvalidate.01 detectada.' : 'No se ha detectado meta de Bing Webmaster Tools.'
-      }
+      robots: { status: robotsInfo.exists ? 'ok' : 'bad', detail: robotsInfo.note },
+      githubRoot: { status: 'manual', detail: 'Verificar en el repo fuente.' },
+      sitemap: { status: sitemapInfo.exists ? 'ok' : 'bad', detail: sitemapInfo.note },
+      errorHandling: { status: errorControlled ? 'ok' : 'warn', detail: `Respuesta HTTP ${errorResult.status}` },
+      browsers: { status: 'manual', detail: 'Requiere multi-navegador.' },
+      links: { status: (internalLinks.length > 1 && externalLinks.length > 0) ? 'ok' : 'warn', detail: `In: ${internalLinks.length} | Out: ${externalLinks.length}` },
+      trends: { status: 'manual', detail: `Comparar temática en Trends.` },
+      sitemapIndexed: { status: 'manual', detail: 'Comprobar indexación manual.' },
+      ads: { status: detectAds(homepage.text + '\n' + scriptSrcs) ? 'ok' : 'warn', detail: detectAds(homepage.text + '\n' + scriptSrcs) ? 'Anuncios detectados.' : 'Sin anuncios.' },
+      accessibility: { status: accessibilityOk ? 'ok' : 'warn', detail: `Alt faltantes: ${imgsWithoutAlt}. Lang: ${!!doc.documentElement.getAttribute('lang')}` },
+      social: { status: linkedInFound ? 'ok' : 'warn', detail: linkedInFound ? 'LinkedIn detectado.' : 'Sin LinkedIn.' },
+      bing: { status: bingVerification ? 'ok' : 'warn', detail: bingVerification ? 'Verificado.' : 'Falta meta Bing.' }
     };
 
     renderResults(payload, base.hostname);
-    setStatus(`Análisis completado para ${base.hostname}.`);
+    setStatus(`Análisis finalizado.`);
   } catch (err) {
     console.error(err);
-    setStatus('No se ha podido analizar la URL. Algunas webs bloquean estas comprobaciones.');
+    setStatus('Error al analizar. Posible bloqueo por CORS o conectividad.');
     scoreEl.textContent = '0';
     scoreTextEl.textContent = 'Error';
-    resultsEl.innerHTML = `<div class="item"><div class="item-head"><h3>Error</h3><span class="pill bad">Fallo</span></div><p>No se pudo leer la web indicada. Prueba con otra URL pública o con HTTPS.</p><div class="meta">${escapeHtml(String(err.message || err))}</div></div>`;
   }
 }
 
@@ -229,16 +245,15 @@ function renderResults(payload, host) {
   for (const check of CHECKS) {
     const data = payload[check.key] || { status: 'manual', detail: 'Sin datos' };
     maxScore += check.weight;
+    
     if (data.status === 'ok') score += check.weight;
     else if (data.status === 'warn') score += Math.round(check.weight * 0.45);
     else if (data.status === 'manual') score += Math.round(check.weight * 0.25);
 
     const item = document.createElement('div');
     item.className = 'item';
-    const modeBadgeClass = check.type === 'automatic' ? 'ok' : check.type === 'heuristic' ? 'warn' : 'manual';
     const statusLabel = data.status === 'ok' ? 'Cumple' : data.status === 'bad' ? 'No cumple' : data.status === 'warn' ? 'Revisar' : 'Manual';
-    const manualExtra = buildManualExtra(check.key, host);
-
+    
     item.innerHTML = `
       <div class="item-head">
         <div>
@@ -250,9 +265,9 @@ function renderResults(payload, host) {
         </div>
       </div>
       <div class="meta">
-        <strong>Tipo:</strong> <span class="badge ${modeBadgeClass}">${check.type === 'automatic' ? 'Automático' : check.type === 'heuristic' ? 'Heurístico' : 'Manual'}</span><br>
-        <strong>Resultado:</strong> ${escapeHtml(data.detail)}
-        ${manualExtra ? `<br><strong>Acceso rápido:</strong> ${manualExtra}` : ''}
+        <strong>Resultado:</strong> ${escapeHtml(data.detail)} <br>
+        ${check.helpUrl ? `<a class="small-link" href="${check.helpUrl}" target="_blank" style="color: #4f46e5; text-decoration: underline;">Saber más sobre este check ↗</a>` : ''}
+        ${buildManualExtra(check.key, host)}
       </div>
     `;
     resultsEl.appendChild(item);
@@ -266,22 +281,11 @@ function renderResults(payload, host) {
 function buildManualExtra(key, host) {
   if (key === 'searchPresence' || key === 'sitemapIndexed') {
     const q = encodeURIComponent(`site:${host}`);
-    return `<a class="small-link" href="https://www.google.com/search?q=${q}" target="_blank">Google</a> · <a class="small-link" href="https://www.bing.com/search?q=${q}" target="_blank">Bing</a>`;
-  }
-  if (key === 'trends') {
-    return `<a class="small-link" href="https://trends.google.com/trends/" target="_blank">Abrir Google Trends</a>`;
-  }
-  if (key === 'githubRoot') {
-    return 'Revisar el repositorio fuente manualmente.';
+    return `<br><strong>Accesos:</strong> <a class="small-link" href="https://www.google.com/search?q=${q}" target="_blank">Google</a> · <a class="small-link" href="https://www.bing.com/search?q=${q}" target="_blank">Bing</a>`;
   }
   return '';
 }
 
 function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
